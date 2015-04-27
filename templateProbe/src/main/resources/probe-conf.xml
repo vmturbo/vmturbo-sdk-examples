@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<probe>
+    <full-class-name>com.vmturbo.sdk.examples.templateProbe.TemplateProbe</full-class-name>
+    <type>TEMPLATE - PUT HERE YOUR PROBE TYPE IDENTIFIER</type>
+    <version>1.0.0</version>
+</probe>
