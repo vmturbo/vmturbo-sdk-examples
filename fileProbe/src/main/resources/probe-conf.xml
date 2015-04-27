@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<probe>
+    <full-class-name>com.vmturbo.sdk.examples.fileProbe.FileProbe</full-class-name>
+    <category>OTHER</category>
+    <type>FILE</type>
+    <version>1.0.0</version>
+</probe>

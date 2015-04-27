@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<probe>
+    <full-class-name>com.vmturbo.sdk.examples.simpleProbe.SimpleProbe</full-class-name>
+    <type>SIMPLE</type>
+    <category>HYPERVISOR</category>
+    <version>1.0.0</version>
+</probe>
