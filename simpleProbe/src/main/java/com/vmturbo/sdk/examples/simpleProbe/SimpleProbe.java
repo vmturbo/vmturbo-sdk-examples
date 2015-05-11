@@ -1,205 +1,310 @@
 package com.vmturbo.sdk.examples.simpleProbe;
 
-import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.Set;
-import java.util.ArrayList;
 
 import org.apache.log4j.Logger;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.vmturbo.platform.sdk.common.DTO.CommodityDTO;
+import com.vmturbo.platform.common.dto.ModelEnum.Commodity;
+import com.vmturbo.platform.common.dto.ModelEnum.Entity;
 import com.vmturbo.platform.sdk.common.DTO.EntityDTO;
-import com.vmturbo.platform.sdk.common.DTO.ModelEnum.Commodity;
-import com.vmturbo.platform.sdk.common.DTO.ModelEnum.Entity;
-import com.vmturbo.platform.sdk.common.DTO.ModelEnum.TemplateType;
+import com.vmturbo.platform.sdk.common.DTO.ProviderType;
 import com.vmturbo.platform.sdk.common.DTO.TemplateDTO;
-import com.vmturbo.platform.sdk.common.DTO.TemplateDTO.Provider;
-import com.vmturbo.platform.sdk.common.DTO.TemplateDTO.ProviderType;
+import com.vmturbo.platform.sdk.common.supplychain.EntityLink;
+import com.vmturbo.platform.sdk.common.supplychain.SupplyChainBuilder;
+import com.vmturbo.platform.sdk.common.supplychain.SupplyChainLinkBuilder;
+import com.vmturbo.platform.sdk.common.supplychain.SupplyChainNodeBuilder;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntry;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntryType;
 import com.vmturbo.platform.sdk.common.util.ResponseCode;
 import com.vmturbo.platform.sdk.common.util.TargetValidationResponse;
 import com.vmturbo.platform.sdk.probe.AbstractProbe;
+import com.vmturbo.platform.sdk.probe.builder.DatacenterBuilder;
+import com.vmturbo.platform.sdk.probe.builder.DiskArrayBuilder;
+import com.vmturbo.platform.sdk.probe.builder.PhysicalMachineBuilder;
+import com.vmturbo.platform.sdk.probe.builder.StorageBuilder;
+import com.vmturbo.platform.sdk.probe.builder.VirtualMachineBuilder;
 
 /**
  * A simple example of probe implementation.
  */
 public class SimpleProbe extends AbstractProbe {
 
-	private static final Logger logger = Logger.getLogger("com.vmturbo.sdk.examples.simpleProbe");
-	private static final String LOGPREFIX = "-- SimpleProbeExample -- : ";
+    private static final Logger logger = Logger.getLogger("com.vmturbo.sdk.examples.simpleProbe");
+    private static final String LOGPREFIX = "-- SimpleProbeExample -- : ";
 
-	/**
-	 * Execute discovery of the target.
-	 *
-	 * @param accountDefinitionMap    Account definition map.
-	 * @return A set of entity DTOs for retrieved service entities.
-	 */
-	@Override
-	protected Set<EntityDTO> discoverTarget(Map<String, String> accountDefinitionMap) {
-		logger.info(LOGPREFIX + "Discover Target");
+    /**
+     * Execute discovery of the target.
+     *
+     * @param accountDefinitionMap Account definition map.
+     * @return A set of entity DTOs for retrieved service entities.
+     */
+    @Override
+    protected Set<EntityDTO> discoverTarget(Map<String, String> accountDefinitionMap) {
+        logger.info(LOGPREFIX + "Discover Target");
 
-		logger.info("Account Credentials:");
-		for (String key: accountDefinitionMap.keySet()) {
-			String value = accountDefinitionMap.get(key);
-			logger.info(key + " : " + value);
-		}
+        logger.info("Account Credentials:");
+        for (String key : accountDefinitionMap.keySet()) {
+            String value = accountDefinitionMap.get(key);
+            logger.info(key + " : " + value);
+        }
 
-		final String DC1_NAME = "dc1";
-		final String PM1_NAME = "pm1";
-		final String DA1_NAME = "da1";
-		final String ST1_NAME = "st1";
-		final String VM1_NAME = "vm1";
-		final String DC1_ID = "dc1-id";
-		final String PM1_ID = "pm1-id";
-		final String DA1_ID = "da1-id";
-		final String ST1_ID = "st1-id";
-		final String VM1_ID = "vm1-id";
-	
-		// Data center entity DTO
-		CommodityDTO commSoldDc = new CommodityDTO(Commodity.Space, null, 1f, 100f);
-		EntityDTO dc = new EntityDTO(Entity.DataCenter, DC1_ID, DC1_NAME, Lists.newArrayList(commSoldDc), null);
+        final String DC1_NAME = "dc1";
+        final String PM1_NAME = "pm1";
+        final String DA1_NAME = "da1";
+        final String ST1_NAME = "st1";
+        final String VM1_NAME = "vm1";
+        final String DC1_ID = "dc1-id";
+        final String PM1_ID = "pm1-id";
+        final String DA1_ID = "da1-id";
+        final String ST1_ID = "st1-id";
+        final String VM1_ID = "vm1-id";
 
-		// Physical machine entity DTO
-		CommodityDTO commSoldPm = new CommodityDTO(Commodity.CPU, null, 1f, 100f);
-		CommodityDTO commBoughtPmDc = new CommodityDTO(Commodity.Space, null, 1f, 100f);
-		Map<String, List<CommodityDTO>> commBoughtPmMap = EntityDTO.createCommBoughtMap(DC1_ID, commBoughtPmDc);
-		EntityDTO pm = new EntityDTO(Entity.PhysicalMachine, PM1_ID, PM1_NAME, Lists.newArrayList(commSoldPm), commBoughtPmMap);
+        // Data center entity DTO
+        DatacenterBuilder dcb = new DatacenterBuilder(DC1_ID);
+        dcb.displayName(DC1_NAME)
+        //commodities sold
+        .space(100f)
+        .power(100f)
+        .cooling(100f);
+        EntityDTO dc = dcb.configure();
+        // Physical machine entity DTO
+        PhysicalMachineBuilder pmb = new PhysicalMachineBuilder(PM1_ID);
+        pmb.displayName(PM1_NAME)
+        //commodities sold
+        .mem(100f)
+        .cpu(100f)
+        //commodities bought, with corresponding provider
+        .datacenter(DC1_ID)
+        .coolingBought(null, 100f, 1f)
+        .powerBought(null, 100f, 1f)
+        .spaceBought(null, 100f, 1f);
 
-		// Disk array entity DTO
-		CommodityDTO commSoldDa = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		EntityDTO da = new EntityDTO(Entity.DiskArray, DA1_ID, DA1_NAME, Lists.newArrayList(commSoldDa), null);
+        EntityDTO pm = pmb.configure();
 
-		// Storage entity DTO
-		CommodityDTO commSoldSt = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		CommodityDTO commBoughtStDa = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		Map<String, List<CommodityDTO>> commBoughtStMap = EntityDTO.createCommBoughtMap(DA1_ID, commBoughtStDa);
-		EntityDTO st = new EntityDTO(Entity.Storage, ST1_ID, ST1_NAME, Lists.newArrayList(commSoldSt), commBoughtStMap);
+        // Disk Array entity DTO
+        DiskArrayBuilder dab = new DiskArrayBuilder(DA1_ID);
+        dab.displayName(DA1_NAME)
+        //commodities sold
+        .storageAcess(100f)
+        .storageAmount(100f)
+        .storageExtent(100f)
+        .storageLatency(100f)
+        .storageProvisioned(100f);
 
-		// Virtual machine entity DTO
-		CommodityDTO commSoldVm = new CommodityDTO(Commodity.VCPU, null, 1f, 100f);
-		CommodityDTO commBoughtVmSt = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		CommodityDTO commBoughtVmPm = new CommodityDTO(Commodity.CPU, null, 1f, 100f);
-		Map<String, List<CommodityDTO>> commBoughtMap = EntityDTO.createCommBoughtMap(PM1_ID, commBoughtVmPm);
-		EntityDTO.putCommBoughtInMap(ST1_ID, commBoughtVmSt, commBoughtMap);
-		EntityDTO vm = new EntityDTO(Entity.VirtualMachine, VM1_ID, VM1_NAME, Lists.newArrayList(commSoldVm), commBoughtMap);
+        EntityDTO da = dab.configure();
 
-		// Create the relationships between entities.
-		// DC and PM
-		dc.getConsistsOf().add(pm.getId());
+        // Storage entity DTO
+        StorageBuilder stb = new StorageBuilder(ST1_ID);
+        stb.displayName(ST1_NAME)
+        //commodities sold
+        .storageAccess(100f)
+        .storageAmount(100f)
+        .storageExtent(100f)
+        .storageLatency(100f)
+        .storageProvisioned(100f)
+        //commodities bought with corresponding provider
+        .diskArray(DA1_ID)
+        .storageAccessBought(null, 100f, 1f)
+        .storageAmountBought(null, 100f, 1f)
+        .storageExtentBought(null, 100f, 1f)
+        .storageLatencyBought(null, 100f, 1f)
+        .storageProvisionedBought(null, 100f, 1f);
+        EntityDTO st = stb.configure();
 
-		// PM and Storage
-		pm.getUnderlying().add(st.getId());
 
-		return Sets.newHashSet(dc, da, pm, st, vm);
-	}
+        // Virtual machine entity DTO
+        VirtualMachineBuilder vmb = new VirtualMachineBuilder(VM1_ID);
+        vmb.displayName(VM1_NAME)
+        //commodities sold
+        .vcpu(100f)
+        .vmem(100f)
+        .vstorage(100f)
+        //commodities bought with corresponding provider
+        .pm(PM1_ID)
+        .cpuBought(null, 100f, 1f)
+        .memBought(null, 100f, 1f)
+        .storage(ST1_ID)
+        .storageAccessBought(null, 100f, 1f)
+        .storageAmountBought(null, 100f, 1f)
+        .storageLatencyBought(null, 100f, 1f)
+        .storageProvisionedBought(null, 100f, 1f);
+        EntityDTO vm = vmb.configure();
 
-	/**
-	 * Get the supply chain for this probe.
-	 * Buying / Selling relationship between service entities:
-	 *     Data centers sell commodities to hosts.
-	 *     Hosts sell commodities to virtual machines.
-	 *     A disk array sells commodities to storages.
-	 *     Storages sell commodities to physical and virtual machines.
-	 *
-	 * @return A set of template DTOs for this probe.
-	 */
-	@Override
-	protected Set<TemplateDTO> getSupplyChainDefinition() {
-		logger.info(LOGPREFIX + "Get supply chain");
+        // Create the relationships between entities.
+        // DC and PM
+        dc.getConsistsOf().add(pm.getId());
 
-		// Data center
-		CommodityDTO commSoldDc = new CommodityDTO(Commodity.Space, null, 1f, 100f);
-		TemplateDTO dc = new TemplateDTO(Entity.DataCenter, Lists.newArrayList(commSoldDc), null,
-				TemplateType.Base, 0);
+        // PM and Storage
+        pm.getUnderlying().add(st.getId());
 
-		// Physical machine
-		CommodityDTO commSoldPm = new CommodityDTO(Commodity.CPU, null, 1f, 100f);
-		CommodityDTO commBoughtPmDc = new CommodityDTO(Commodity.Space, null, 1f, 100f);
-		Provider provider = new Provider(Entity.DataCenter, ProviderType.HOSTING, 1, 1);
-		Map<Provider, List<CommodityDTO>> commBoughtPmMap = TemplateDTO.createCommBoughtMap(provider, commBoughtPmDc);
-		TemplateDTO pm = new TemplateDTO(Entity.PhysicalMachine, Lists.newArrayList(commSoldPm), commBoughtPmMap,
-				TemplateType.Base, 0);
+        return Sets.newHashSet(dc, da, pm, st, vm);
+    }
 
-		// Disk array
-		CommodityDTO commSoldDa = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		TemplateDTO da = new TemplateDTO(Entity.DiskArray, Lists.newArrayList(commSoldDa), null,
-				TemplateType.Base, 0);
+    /**
+     * Get the supply chain for this probe. Buying / Selling relationship between service entities:
+     * Data centers sell commodities to hosts. Hosts sell commodities to virtual machines. A disk
+     * array sells commodities to storages. Storages sell commodities to physical and virtual
+     * machines.
+     *
+     * @return A set of template DTOs for this probe.
+     */
+    @Override
+    protected Set<TemplateDTO> getSupplyChainDefinition() {
+        logger.info(LOGPREFIX + "Get supply chain");
+        SupplyChainBuilder scb = new SupplyChainBuilder();
 
-		// Storage
-		CommodityDTO commSoldSt = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		CommodityDTO commBoughtStDa = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		provider = new Provider(Entity.DiskArray, ProviderType.HOSTING, 1, 1);
-		Map<Provider, List<CommodityDTO>> commBoughtStMap = TemplateDTO.createCommBoughtMap(provider, commBoughtStDa);
-		TemplateDTO st = new TemplateDTO(Entity.Storage, Lists.newArrayList(commSoldSt), commBoughtStMap,
-				TemplateType.Base, 0);
+        // VM
+        SupplyChainNodeBuilder top = new SupplyChainNodeBuilder()
+        .entity(Entity.VirtualMachine)
+        .selling(Commodity.VCPU)
+        .selling(Commodity.VMem)
+        .selling(Commodity.VStorage);
 
-		// Virtual machine
-		CommodityDTO commSoldVm = new CommodityDTO(Commodity.VCPU, null, 1f, 100f);
-		CommodityDTO commBoughtVmSt = new CommodityDTO(Commodity.StorageAmount, null, 1f, 100f);
-		CommodityDTO commBoughtVmPm = new CommodityDTO(Commodity.CPU, null, 1f, 100f);
-		provider = new Provider(Entity.PhysicalMachine, ProviderType.HOSTING, 1, 1);
-		Provider provider2 = new Provider(Entity.Storage, ProviderType.LAYEREDOVER, 1, 1);
-		Map<Provider, List<CommodityDTO>> commBoughtMap = TemplateDTO.createCommBoughtMap(provider, commBoughtVmPm);
-		TemplateDTO.putCommBoughtInMap(provider2, commBoughtVmSt, commBoughtMap);
-		TemplateDTO vm = new TemplateDTO(Entity.VirtualMachine, Lists.newArrayList(commSoldVm), commBoughtMap,
-				TemplateType.Base, 0);
+        // PM
+        SupplyChainNodeBuilder pmNode = new SupplyChainNodeBuilder()
+        .entity(Entity.PhysicalMachine)
+        .selling(Commodity.CPU)
+        .selling(Commodity.Mem);
 
-		return Sets.newHashSet(dc, da, pm, st, vm);
-	}
+        // Storage
+        SupplyChainNodeBuilder stNode = new SupplyChainNodeBuilder()
+        .entity(Entity.Storage)
+        .selling(Commodity.StorageAmount)
+        .selling(Commodity.StorageAccess)
+        .selling(Commodity.Extent)
+        .selling(Commodity.StorageLatency)
+        .selling(Commodity.StorageProvisioned);
 
-	/**
-	 * Returns the fields and their meta data required by the probe to validate and discover the targets 
-	 * as a set of {@link AccountDefinitionEntry} objects.<br>
-	 * Each Account Definition Entry denotes the meta data for the field required by the probe
-	 * to reach the target, the value for which will be provided by the user.
-	 * Each fields is defined as optional or mandatory.
-	 *
-	 * @return The account definition map.
-	 */
-	@Override
-	protected Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
-		logger.info(LOGPREFIX + "Get account definition");
+        // Disk Array
+        SupplyChainNodeBuilder daNode = new SupplyChainNodeBuilder()
+        .entity(Entity.DiskArray)
+        .selling(Commodity.StorageAmount)
+        .selling(Commodity.StorageLatency)
+        .selling(Commodity.StorageProvisioned)
+        .selling(Commodity.Extent)
+         .autoCreate(true);
 
-		//AccountDefinitionEntry entry = SDKUtil.setTargetIdentifierEntry(displayname, description, mandatory, verification_regex);
-		ImmutableMap<String, AccountDefinitionEntry> accountDefinitionEntryMap = ImmutableMap.of(
-				/*
-				 * This mandatory field denotes the instance name of the target. 
-				 */
-				AccountDefinitionEntry.TARGET_IDENTIFIER, new AccountDefinitionEntry(AccountDefinitionEntry.TARGET_IDENTIFIER, "Name", "name of the target", AccountDefinitionEntryType.Mandatory, ".*"),
-				/*
-				 * This mandatory field denotes the user name required to connect to the target
-				 */
-				AccountDefinitionEntry.USERNAME_FIELD, new AccountDefinitionEntry(AccountDefinitionEntry.USERNAME_FIELD, "User", "username to login to the target", AccountDefinitionEntryType.Mandatory, ".*"),
-				/*
-				 * This mandatory field denotes the password required to connect to the target
-				 */
-				AccountDefinitionEntry.PASSWORD_FIELD, new AccountDefinitionEntry(AccountDefinitionEntry.PASSWORD_FIELD, "Password", "password for the account", AccountDefinitionEntryType.Mandatory, ".*"),
-				/*
-				 * This is an optional field in the account definition
-				 */
-				AccountDefinitionEntry.VERSION_FIELD, new AccountDefinitionEntry(AccountDefinitionEntry.VERSION_FIELD, "Version", "target version", AccountDefinitionEntryType.Optional, ".*")
-				);
-		return accountDefinitionEntryMap;
-	}
 
-	/**
-	 * Validate the target.
-	 *
-	 * @param accountDefinitionMap    Account definition map.
-	 * @return The message of target validation status.
-	 */
-	@Override
-	protected TargetValidationResponse validateTarget(Map<String, String> accountValues) {
-		logger.info(LOGPREFIX +"Validate Target");
-		TargetValidationResponse validationResponse = new TargetValidationResponse();
-		validationResponse.targetValidationStatus = ResponseCode.SUCCESS;
-		validationResponse.targetValidationExplanation = "Test Probe Validated";
-		return validationResponse;
-	}
+        // Datacenter
+        SupplyChainNodeBuilder dcNode = new SupplyChainNodeBuilder()
+        .entity(Entity.DataCenter)
+        .selling(Commodity.Space)
+        .selling(Commodity.Power)
+        .selling(Commodity.Cooling);
+
+        // Link from VM to PM
+        SupplyChainLinkBuilder vm2pm = new SupplyChainLinkBuilder();
+        vm2pm.link(Entity.VirtualMachine, Entity.PhysicalMachine, ProviderType.HOSTING)
+            .commodity(Commodity.CPU)
+            .commodity(Commodity.Mem);
+        EntityLink top2pmLink = vm2pm.build();
+        // Link from VM to ST
+        SupplyChainLinkBuilder vm2st = new SupplyChainLinkBuilder();
+        vm2st.link(Entity.VirtualMachine, Entity.Storage,ProviderType.LAYEREDOVER)
+            .commodity(Commodity.StorageAmount)
+            .commodity(Commodity.StorageAccess)
+            .commodity(Commodity.StorageProvisioned)
+            .commodity(Commodity.StorageLatency);
+        EntityLink top2stLink = vm2st.build();
+        // Link from PM to DC
+        SupplyChainLinkBuilder pm2dc = new SupplyChainLinkBuilder();
+        pm2dc.link(Entity.PhysicalMachine, Entity.DataCenter,ProviderType.HOSTING)
+            .commodity(Commodity.Cooling)
+            .commodity(Commodity.Power)
+            .commodity(Commodity.Space);
+        EntityLink pm2dcLink = pm2dc.build();
+
+        // Link from ST to DA
+        SupplyChainLinkBuilder st2da = new SupplyChainLinkBuilder();
+        st2da.link(Entity.Storage, Entity.DiskArray,ProviderType.HOSTING)
+            .commodity(Commodity.StorageAccess)
+            .commodity(Commodity.StorageAmount)
+            .commodity(Commodity.Extent)
+            .commodity(Commodity.StorageLatency)
+            .commodity(Commodity.StorageProvisioned);
+        EntityLink stToDaLink = st2da.build();
+
+
+        // Top Node - Connect VM to PM
+        scb.top(top)
+        .connectsTo(pmNode, top2pmLink)
+        .connectsTo(stNode, top2stLink)
+        // Next Node - Connect PM to DC
+        .entity(pmNode)
+        .connectsTo(dcNode, pm2dcLink)
+        // Next node - Connects ST to DA
+        .entity(stNode)
+        .connectsTo(daNode, stToDaLink)
+        .entity(daNode)
+        // Last Node - no more connections
+        .entity(dcNode);
+
+        return scb.configure();
+    }
+
+    /**
+     * Returns the fields and their meta data required by the probe to validate and discover the
+     * targets as a set of {@link AccountDefinitionEntry} objects.<br>
+     * Each Account Definition Entry denotes the meta data for the field required by the probe to
+     * reach the target, the value for which will be provided by the user. Each fields is defined as
+     * optional or mandatory.
+     *
+     * @return The account definition map.
+     */
+    @Override
+    protected Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
+        logger.info(LOGPREFIX + "Get account definition");
+
+        //AccountDefinitionEntry entry = SDKUtil.setTargetIdentifierEntry(displayname, description, mandatory, verification_regex);
+        ImmutableMap<String, AccountDefinitionEntry> accountDefinitionEntryMap = ImmutableMap
+                        .of(
+                            /*
+                             * This mandatory field denotes the instance name of the target.
+                             */
+                            AccountDefinitionEntry.TARGET_IDENTIFIER,
+                            new AccountDefinitionEntry(AccountDefinitionEntry.TARGET_IDENTIFIER,
+                                                       "Name", "name of the target",
+                                                       AccountDefinitionEntryType.Mandatory, ".*"),
+                            /*
+                             * This mandatory field denotes the user name required to connect to the target
+                             */
+                            AccountDefinitionEntry.USERNAME_FIELD,
+                            new AccountDefinitionEntry(AccountDefinitionEntry.USERNAME_FIELD,
+                                                       "User", "username to login to the target",
+                                                       AccountDefinitionEntryType.Mandatory, ".*"),
+                            /*
+                             * This mandatory field denotes the password required to connect to the target
+                             */
+                            AccountDefinitionEntry.PASSWORD_FIELD,
+                            new AccountDefinitionEntry(AccountDefinitionEntry.PASSWORD_FIELD,
+                                                       "Password", "password for the account",
+                                                       AccountDefinitionEntryType.Mandatory, ".*"),
+                            /*
+                             * This is an optional field in the account definition
+                             */
+                            AccountDefinitionEntry.VERSION_FIELD,
+                            new AccountDefinitionEntry(AccountDefinitionEntry.VERSION_FIELD,
+                                                       "Version", "target version",
+                                                       AccountDefinitionEntryType.Optional, ".*"));
+        return accountDefinitionEntryMap;
+    }
+
+    /**
+     * Validate the target.
+     *
+     * @param accountDefinitionMap Account definition map.
+     * @return The message of target validation status.
+     */
+    @Override
+    protected TargetValidationResponse validateTarget(Map<String, String> accountValues) {
+        logger.info(LOGPREFIX + "Validate Target");
+        TargetValidationResponse validationResponse = new TargetValidationResponse();
+        validationResponse.targetValidationStatus = ResponseCode.SUCCESS;
+        validationResponse.targetValidationExplanation = "Test Probe Validated";
+        return validationResponse;
+    }
 
 }

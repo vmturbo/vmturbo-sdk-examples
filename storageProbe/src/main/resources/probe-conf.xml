@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<probe>
+    <full-class-name>com.vmturbo.sdk.examples.storageProbe.StorageProbe</full-class-name>
+    <type>ST</type>
+    <category>CUSTOM</category>
+    <version>1.0.0</version>
+</probe>

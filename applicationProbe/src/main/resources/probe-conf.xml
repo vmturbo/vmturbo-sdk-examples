@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<probe>
+    <full-class-name>com.vmturbo.sdk.examples.applicationProbe.ApplicationProbe</full-class-name>
+    <type>APP</type>
+    <category>CUSTOM</category>
+    <version>1.0.0</version>
+</probe>

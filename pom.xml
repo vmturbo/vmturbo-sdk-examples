@@ -20,7 +20,8 @@
 		<module>fileProbe</module>
 		<module>simpleProbe</module>
 		<module>templateProbe</module>
-		<!-- <module>vimProbe</module> -->
+		<module>applicationProbe</module>
+		<module>storageProbe</module>
 	</modules>
 
 </project>
