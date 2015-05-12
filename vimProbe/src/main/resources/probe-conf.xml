@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<probe>
-    <full-class-name>com.vmturbo.sdk.examples.vimProbe.VimProbe</full-class-name>
-    <type>VC</type>
-    <category>HYPERVISOR</category>
-    <version>1.0.0</version>
-</probe>
