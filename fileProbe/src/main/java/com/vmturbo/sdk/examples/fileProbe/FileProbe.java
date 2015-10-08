@@ -1,5 +1,6 @@
 package com.vmturbo.sdk.examples.fileProbe;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,9 +19,11 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+
 import com.vmturbo.platform.common.dto.CommodityDTO;
+import com.vmturbo.platform.common.dto.ErrorDTO;
+import com.vmturbo.platform.common.dto.ErrorSeverity;
 import com.vmturbo.platform.common.dto.ModelEnum;
 import com.vmturbo.platform.common.dto.ModelEnum.Commodity;
 import com.vmturbo.platform.common.dto.ModelEnum.Entity;
@@ -30,21 +33,23 @@ import com.vmturbo.platform.sdk.common.DTO.Provider;
 import com.vmturbo.platform.sdk.common.DTO.ProviderType;
 import com.vmturbo.platform.sdk.common.DTO.TemplateDTO;
 import com.vmturbo.platform.sdk.common.DTO.TemplateDTO.TemplateCommodity;
+import com.vmturbo.platform.sdk.common.supplychain.EntityBuilder;
+import com.vmturbo.platform.sdk.common.supplychain.EntityLink;
+import com.vmturbo.platform.sdk.common.supplychain.SupplyChainBuilder;
+import com.vmturbo.platform.sdk.common.supplychain.SupplyChainLinkBuilder;
+import com.vmturbo.platform.sdk.common.supplychain.SupplyChainNodeBuilder;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntry;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntryType;
-import com.vmturbo.platform.sdk.common.util.ResponseCode;
+import com.vmturbo.platform.sdk.common.util.TargetDiscoveryResponse;
 import com.vmturbo.platform.sdk.common.util.TargetValidationResponse;
-import com.vmturbo.platform.sdk.probe.AbstractProbe;
+import com.vmturbo.platform.sdk.probe.IProbe;
 
 /**
  * A sample implementation of the file probe. This probe reads data from an XML topology file and
  * generates entity DTOs for the target.
  */
-public class FileProbe extends AbstractProbe {
+public class FileProbe implements IProbe {
 
-    private static final Logger logger = Logger
-                    .getLogger("com.vmturbo.platform.container.mediation");
-    private static final String LOGPREFIX = "-- FileProbeExample -- : ";
     private static final String ABSTRACTION = "Abstraction:";
     private static final String NETWORKING = "Networking:";
     private static final String ATTR_ENTITY_TYPE = "xsi:type";
@@ -70,6 +75,8 @@ public class FileProbe extends AbstractProbe {
                                 Commodity.ClusterCommodity, Commodity.NetworkCommodity,
                                 Commodity.DataCenterCommodity, Commodity.ApplicationCommodity);
 
+    private final Logger logger = Logger.getLogger(getClass());
+
     /**
      * Map of entity's uuid indexed by commodity uuid.
      */
@@ -83,12 +90,15 @@ public class FileProbe extends AbstractProbe {
 
     /**
      * Generate an entity DTO from an element in XML
-     * 
+     *
      * @param elem Element in XML
      * @return An EntityDTO parsed from the element in XML.
      */
     private EntityDTO generateEntityDTO(Element elem) {
-        EntityDTO ed = new EntityDTO(null, null, null, null, null);
+        //EntityDTO ed = new EntityDTO(null, null, null, null, null);
+        EntityBuilder eb = new EntityBuilder();
+        eb.entity(Entity.Unknown, elem.getAttribute(ATTR_UUID));
+
         String entityType = elem.getAttribute(ATTR_ENTITY_TYPE);
         if (entityType.startsWith(ABSTRACTION)) {
             entityType = entityType.replaceFirst(ABSTRACTION, "");
@@ -96,41 +106,81 @@ public class FileProbe extends AbstractProbe {
             entityType = entityType.replaceFirst(NETWORKING, "");
         }
 
-        ed.setEntity(Entity.Unknown);
         for (Entity en : Entity.values()) {
             if (entityType.equals(en.toString())) {
-                ed.setEntity(en);
+                eb.entity(en, elem.getAttribute(ATTR_UUID));
                 break;
             }
         }
 
-        ed.setId(elem.getAttribute(ATTR_UUID));
-
         // If no "dispalyName" tag found, use "name" tag
         String name = elem.getAttribute(ATTR_DISP_NAME);
-        if (name.equals(""))
+        if (name.equals("")) {
             name = elem.getAttribute(ATTR_NAME);
-        ed.setDisplayName(name);
+        }
+        eb.displayName(name);
 
         // Construct the commodity objects from the topology file
-        List<CommodityDTO> commList = Lists.newArrayList();
         NodeList commNodeList = elem.getElementsByTagName(TAG_COMM);
         int commNodeListLen = commNodeList.getLength();
         for (int k = 0; k < commNodeListLen; k++) {
             Node commNode = commNodeList.item(k);
             if (commNode.getNodeType() == Node.ELEMENT_NODE) {
-                CommodityDTO cd = generateCommDTO((Element)commNode);
-                commList.add(cd);
+                // Find commodity type
+                String commType = ((Element)commNode).getAttribute(ATTR_ENTITY_TYPE).replaceFirst(ABSTRACTION, "");
+                Commodity commDTOType = Commodity.Unknown;
+                for (Commodity co : Commodity.values()) {
+                    if (commType.equals(co.toString())) {
+                        commDTOType = co;
+                        break;
+                    }
+                }
+
+                // Set Key
+                String key = ((Element)commNode).getAttribute(KEY);
+                if (key != null && !key.isEmpty()) {
+                    eb.sells(commDTOType, key);
+                } else if (commWithKeySet.contains(commDTOType)) {
+                    eb.sells(commDTOType, "foo");
+                }
+                else {
+                    eb.sells(commDTOType);
+                }
+
+                // Set Capacity
+                try {
+                    String capacity = ((Element)commNode).getAttribute(ATTR_CAPACITY);
+                    if (capacity != "") {
+                        eb.capacity(Float.parseFloat(capacity));
+                    } else if (commWithKeySet.contains(commDTOType)) {
+                        eb.capacity(100f);
+                    }
+                }
+                catch (Exception e) {
+                    logger.error("Capacity parsing error: ", e);
+                }
+
+                // Set Used
+
+                try {
+                    String used = ((Element)commNode).getAttribute(ATTR_USED);
+                    if (used != "") {
+                        eb.used(Float.parseFloat(used));
+                    } else if (commWithKeySet.contains(commDTOType)) {
+                        eb.used(1f);
+                    }
+                }
+                catch (Exception e) {
+                    logger.error("Usage parsing error: ", e);
+                }
+
                 String uuid = ((Element)commNode).getAttribute(ATTR_UUID);
-                commToSeMap.put(uuid, ed.getId());
+                commToSeMap.put(uuid, elem.getAttribute(ATTR_UUID));
             }
         }
 
-        ed.setSold(commList);
-
         // Construct the commodities bought objects from the topology file
         Map<String, CommodityDTO> consumesToCommMap = new HashMap<String, CommodityDTO>();
-        edToConsCommBoughtMap.put(ed, consumesToCommMap);
         commNodeList = elem.getElementsByTagName(TAG_COMM_BOUGHT);
         commNodeListLen = commNodeList.getLength();
         for (int k = 0; k < commNodeListLen; k++) {
@@ -142,12 +192,14 @@ public class FileProbe extends AbstractProbe {
             }
         }
 
+        EntityDTO ed = eb.configure();
+        edToConsCommBoughtMap.put(ed, consumesToCommMap);
         return ed;
     }
 
     /**
      * Generate a commodity DTO from an element in XML.
-     * 
+     *
      * @param elem Element in XML
      * @return An CommodityDTO parsed from the element in XML.
      */
@@ -169,47 +221,56 @@ public class FileProbe extends AbstractProbe {
         String key = elem.getAttribute(KEY);
         if (key != null && !key.isEmpty()) {
             cd.setKey(key);
+        } else if (commWithKeySet.contains(cd.getCommodity())) {
+            cd.setKey("foo");
         }
 
         // Set Capacity
         try {
             String capacity = elem.getAttribute(ATTR_CAPACITY);
-            if (capacity != "")
+            if (capacity != "") {
                 cd.setCapacity(Float.parseFloat(capacity));
+            } else if (commWithKeySet.contains(cd.getCommodity())) {
+                cd.setCapacity(100f);
+            }
         }
         catch (Exception e) {
-            logger.error(LOGPREFIX + "Capacity parsing error: ", e);
+            logger.error("Capacity parsing error: ", e);
         }
 
         // Set Used
         try {
             String used = elem.getAttribute(ATTR_USED);
-            if (used != "")
+            if (used != "") {
                 cd.setUsed(Float.parseFloat(used));
+            } else if (commWithKeySet.contains(cd.getCommodity())) {
+                cd.setUsed(1f);
+            }
         }
         catch (Exception e) {
-            logger.error(LOGPREFIX + "Usage parsing error: ", e);
+            logger.error("Usage parsing error: ", e);
         }
         return cd;
     }
 
     /**
      * Discover Target
-     * 
+     *
      * @param accountValues Map representing the values for the fields in the AccountDefintion
      *            required for discovering the target
      * @return Entities discovered by the probe as a set of {@link EntityDTO}
-     * 
+     *
      */
     @Override
-    protected Set<EntityDTO> discoverTarget(Map<String, String> accountValues) {
-        logger.info(LOGPREFIX + "Discover Target");
+    public TargetDiscoveryResponse discoverTarget(Map<String, String> accountValues) {
+        logger.info("Discover Target");
+        final TargetDiscoveryResponse response = new TargetDiscoveryResponse();
         Set<EntityDTO> entityDTOSet = new HashSet<EntityDTO>();
 
         // Get the XML topology file path.
         String fileName = accountValues.get(AccountDefinitionEntry.NAME_OR_ADDRESS_FIELD);
 
-        logger.info(LOGPREFIX + "Start parsing the file: " + fileName);
+        logger.info("Start parsing the file: " + fileName);
 
         EntityDTO tempDc = null;
         List<EntityDTO> pmList = new ArrayList<EntityDTO>();
@@ -219,16 +280,18 @@ public class FileProbe extends AbstractProbe {
             // Create a Document Object for the XML topology file.
             DocumentBuilderFactory dbfac = DocumentBuilderFactory.newInstance();
             DocumentBuilder docBuilder = dbfac.newDocumentBuilder();
-            logger.info(LOGPREFIX + "Started loading discovery file " + fileName);
+            logger.info("Started loading discovery file " + fileName);
             InputStream inputStream = this.getClass().getClassLoader()
                             .getResourceAsStream(fileName);
             if (inputStream == null) {
-                logger.error(LOGPREFIX + "Cannot find the file: " + fileName);
-                return entityDTOSet;
+                final String message = "Cannot find the file: " + fileName;
+                logger.error(message);
+                response.getErrors().add(new ErrorDTO(ErrorSeverity.CRITICAL, message));
+                return response;
             }
             Document doc = docBuilder.parse(inputStream);
             doc.getDocumentElement().normalize();
-            logger.info(LOGPREFIX + "Ended loading discovery file " + fileName);
+            logger.info("Ended loading discovery file " + fileName);
 
             // Find the node list for the Market.
             NodeList mktNodeList = doc.getElementsByTagName(TAG_MARKET);
@@ -239,8 +302,7 @@ public class FileProbe extends AbstractProbe {
                     continue;
                 }
 
-                logger.info(LOGPREFIX + "File name received for loading: " + fileName);
-
+                logger.info("File name received for loading: " + fileName);
 
                 Element mktElem = (Element)mktNode;
                 if (!mktElem.getAttribute(ATTR_MAIN_MARKET).equals("true")) { // Target on the main Market.
@@ -260,10 +322,12 @@ public class FileProbe extends AbstractProbe {
                     Element entityElem = (Element)entityNode;
                     EntityDTO ed = generateEntityDTO(entityElem);
 
-                    if (ed.getEntity().equals(Entity.ActionManager))
+                    if (ed.getEntity().equals(Entity.ActionManager)) {
                         continue; // Skip the ActionManager SE's
-                    if (ed.getEntity().equals(Entity.Application))
+                    }
+                    if (ed.getEntity().equals(Entity.Application)) {
                         continue; // Skip the Application SE's
+                    }
 
                     entityDTOSet.add(ed);
 
@@ -281,7 +345,7 @@ public class FileProbe extends AbstractProbe {
             }
         }
         catch (Exception e) {
-            logger.error(LOGPREFIX + "SE ParseError: ", e);
+            logger.error("SE ParseError: ", e);
         }
 
         // Set provider information for commodities bought for each SE.
@@ -294,7 +358,7 @@ public class FileProbe extends AbstractProbe {
                 String commUuid = entry.getKey();
                 CommodityDTO commBought = entry.getValue();
                 String provUuid = commToSeMap.get(commUuid);
-                EntityDTO.putCommBoughtInMap(provUuid, commBought, commBoughtMap);
+                ed.addCommodityBought(provUuid, commBought);
             }
             ed.setBoughtMap(commBoughtMap);
         }
@@ -311,7 +375,8 @@ public class FileProbe extends AbstractProbe {
             tempDc.getConsistsOf().add(pm.getId());
         }
 
-        return entityDTOSet;
+        response.setEntities(entityDTOSet);
+        return response;
     }
 
     /**
@@ -339,7 +404,7 @@ public class FileProbe extends AbstractProbe {
 
     /**
      * Generate a template DTO with TemplateType = Base and templatePriority = 0.
-     * 
+     *
      * @param entityType Entity type
      * @param commSoldList Commodity sold list
      * @param commBoughtPair Pair of provider and commodity bought list
@@ -360,178 +425,163 @@ public class FileProbe extends AbstractProbe {
     }
 
     /**
-     * Generate a commodity DTO with used = 1f, and capacity = 100f and key = "foo" if it is in
-     * commWithKeySet; otherwise, key is set to null.
-     * 
-     * @param commodity Commodity type
-     * @return A commodity DTO.
-     */
-    private CommodityDTO getCommDTO(Commodity commodity) {
-        if (commWithKeySet.contains(commodity)) {
-            return new CommodityDTO(commodity, "foo", 1f, 100f);
-        } else {
-            return new CommodityDTO(commodity, null, 1f, 100f);
-        }
-    }
-
-    /**
-     * Generate a TemplateCommodity with and key = "foo" if it is in commWithKeySet; otherwise, key
-     * is set to null.
-     * 
-     * @param commodity Commodity type
-     * @return A TemplateCommodity
-     */
-    private TemplateCommodity getTemplateCommDTO(Commodity commodity) {
-        if (commWithKeySet.contains(commodity)) {
-            return new TemplateCommodity(commodity, "foo");
-        } else {
-            return new TemplateCommodity(commodity, null);
-        }
-    }
-
-    /**
-     * Generate an commodity DTO list.
-     * 
-     * @param commodities Commodity types
-     * @return A commodity DTO list
-     */
-    @SuppressWarnings("unused")
-    private List<CommodityDTO> getCommList(Commodity... commodities) {
-        List<CommodityDTO> commSold = Lists.newArrayList();
-        int commLen = commodities.length;
-        for (int i = 0; i < commLen; i++) {
-            commSold.add(getCommDTO(commodities[i]));
-        }
-        return commSold;
-    }
-
-    /**
-     * Generate an TemplateCommodity list.
-     * 
-     * @param commodities Commodity types
-     * @return A commodity list
-     */
-    private List<TemplateCommodity> getTemplateCommList(Commodity... commodities) {
-        List<TemplateCommodity> commSold = Lists.newArrayList();
-        int commLen = commodities.length;
-        for (int i = 0; i < commLen; i++) {
-            commSold.add(getTemplateCommDTO(commodities[i]));
-        }
-        return commSold;
-    }
-
-    /**
      * Get the supply chain for this probe.
-     * 
+     *
      * Buying / Selling relationship between service entities: Data centers sell commodities to
      * hosts. Hosts sell commodities to virtual machines. A disk array sells commodities to
      * storages. Storages sell commodities to physical and virtual machines. Virtual machines sell
      * commodities to applications.
-     * 
+     *
      * @return A set of template DTOs for this probe.
      */
     @Override
-    protected Set<TemplateDTO> getSupplyChainDefinition() {
-        logger.info(LOGPREFIX + "Get supply chain");
+    public Set<TemplateDTO> getSupplyChainDefinition() {
+        logger.info("Get supply chain");
 
-        Set<TemplateDTO> templateDTOSet = Sets.newHashSet();
+        String key = "foo";
+        SupplyChainBuilder scb = new SupplyChainBuilder();
 
-        // Data center DTO
-        List<TemplateCommodity> dcCommSold = getTemplateCommList(Commodity.Power, Commodity.Space,
-                                                                 Commodity.Cooling);
-        templateDTOSet.add(generateTemplateDTO(Entity.DataCenter, dcCommSold));
+        // Setup Supply Chain Nodes
+        // Application Node and commodity list
+        SupplyChainNodeBuilder appNode = new SupplyChainNodeBuilder();
+        appNode.entity(Entity.Application);
 
-        // Network DTO
-        templateDTOSet.add(generateTemplateDTO(Entity.Network, null));
-        templateDTOSet.add(generateTemplateDTO(Entity.DistributedVirtualPortgroup, null));
+        // VM Node and commodity list
+        SupplyChainNodeBuilder vmNode = new SupplyChainNodeBuilder();
+        vmNode.entity(Entity.VirtualMachine);
+        vmNode.selling(Commodity.VCPU)
+              .selling(Commodity.VMem)
+              .selling(Commodity.ApplicationCommodity, key);
 
-        // DiskArray DTO
-        List<TemplateCommodity> daCommSold = getTemplateCommList(Commodity.Extent,
-                                                                 Commodity.StorageAccess,
-                                                                 Commodity.StorageLatency);
-        templateDTOSet.add(generateTemplateDTO(Entity.DiskArray, daCommSold));
+        // PM Node and commodity list
+        SupplyChainNodeBuilder pmNode = new SupplyChainNodeBuilder();
+        pmNode.entity(Entity.PhysicalMachine);
+        pmNode.selling(Commodity.CPU)
+              .selling(Commodity.Mem)
+              .selling(Commodity.IOThroughput)
+              .selling(Commodity.NetThroughput)
+              .selling(Commodity.Q1VCPU)
+              .selling(Commodity.DatastoreCommodity, key)
+              .selling(Commodity.DataCenterCommodity, key)
+              .selling(Commodity.ClusterCommodity, key);
 
-        // Storage DTO
-        List<TemplateCommodity> stCommSold = getTemplateCommList(Commodity.StorageAmount,
-                                                                 Commodity.StorageProvisioned,
-                                                                 Commodity.StorageAccess,
-                                                                 Commodity.StorageLatency);
-        Provider stProvDa = new Provider(Entity.DiskArray, ProviderType.HOSTING, 1, 1);
-        List<TemplateCommodity> stCommBoughtFromDa = getTemplateCommList(Commodity.Extent,
-                                                                         Commodity.StorageAccess,
-                                                                         Commodity.StorageLatency);
+        // Data center Node and commodity list
+        SupplyChainNodeBuilder dcNode = new SupplyChainNodeBuilder();
+        dcNode.entity(Entity.DataCenter);
+        dcNode.selling(Commodity.Space)
+              .selling(Commodity.Power)
+              .selling(Commodity.Cooling);
 
-        templateDTOSet.add(generateTemplateDTO(Entity.Storage, stCommSold,
-                                               new TemplateCommBoughtPair(stProvDa,
-                                                                          stCommBoughtFromDa)));
+        // Network Node
+        SupplyChainNodeBuilder ntNode = new SupplyChainNodeBuilder();
+        ntNode.entity(Entity.Network);
 
-        // PM DTO
-        List<TemplateCommodity> pmCommSold = getTemplateCommList(Commodity.CPU, Commodity.Mem,
-                                                                 Commodity.IOThroughput,
-                                                                 Commodity.ClusterCommodity,
-                                                                 Commodity.NetThroughput,
-                                                                 Commodity.DatastoreCommodity,
-                                                                 Commodity.Q1VCPU,
-                                                                 Commodity.DataCenterCommodity);
+        // Distributed Virtual Port Group Node
+        SupplyChainNodeBuilder dvpNode = new SupplyChainNodeBuilder();
+        dvpNode.entity(Entity.DistributedVirtualPortgroup);
 
-        Provider pmProvDc = new Provider(Entity.DataCenter, ProviderType.HOSTING, 1, 1);
-        List<TemplateCommodity> pmCommBoughtFromDc = getTemplateCommList(Commodity.Power,
-                                                                         Commodity.Space,
-                                                                         Commodity.Cooling);
-        Provider pmProvSt = new Provider(Entity.Storage, ProviderType.LAYEREDOVER,
-                                         Integer.MAX_VALUE, 0);
-        List<TemplateCommodity> pmCommBoughtFromSt = getTemplateCommList(Commodity.StorageAccess,
-                                                                         Commodity.StorageLatency);
+        // Storge Node and commodity list
+        SupplyChainNodeBuilder stNode = new SupplyChainNodeBuilder();
+        stNode.entity(Entity.Storage);
+        stNode.selling(Commodity.StorageAmount)
+              .selling(Commodity.StorageAccess)
+              .selling(Commodity.StorageProvisioned)
+              .selling(Commodity.StorageLatency);
 
-        templateDTOSet.add(generateTemplateDTO(Entity.PhysicalMachine, pmCommSold,
-                                               new TemplateCommBoughtPair(pmProvDc,
-                                                                          pmCommBoughtFromDc),
-                                               new TemplateCommBoughtPair(pmProvSt,
-                                                                          pmCommBoughtFromSt)));
+        // DiskArray Node and commodity list
+        SupplyChainNodeBuilder daNode = new SupplyChainNodeBuilder();
+        daNode.entity(Entity.DiskArray);
+        daNode.selling(Commodity.StorageAccess)
+              .selling(Commodity.StorageLatency)
+              .selling(Commodity.Extent, key);
 
-        // VM DTO
-        List<TemplateCommodity> vmCommSold = getTemplateCommList(Commodity.VCPU, Commodity.VMem,
-                                                                 Commodity.ApplicationCommodity);
-        List<TemplateCommodity> vmCommBoughtFromPm = getTemplateCommList(Commodity.CPU,
-                                                                         Commodity.Mem);
-        List<TemplateCommodity> vmCommBoughtFromSt = getTemplateCommList(Commodity.StorageAmount,
-                                                                         Commodity.StorageProvisioned);
-        Provider vmProvPm = new Provider(Entity.PhysicalMachine, ProviderType.HOSTING, 1, 1);
-        Provider vmProvSt = new Provider(Entity.Storage, ProviderType.LAYEREDOVER,
-                                         Integer.MAX_VALUE, 0);
 
-        templateDTOSet.add(generateTemplateDTO(Entity.VirtualMachine, vmCommSold,
-                                               new TemplateCommBoughtPair(vmProvPm,
-                                                                          vmCommBoughtFromPm),
-                                               new TemplateCommBoughtPair(vmProvSt,
-                                                                          vmCommBoughtFromSt)));
+        // Setup Supply Chain Links
+        // Add Application node into supply chain
+        scb.top(appNode);
 
-        // Application DTO
-        List<TemplateCommodity> appCommSold = getTemplateCommList();
-        List<TemplateCommodity> appCommBoughtFromVm = getTemplateCommList(Commodity.VCPU,
-                                                                          Commodity.VMem,
-                                                                          Commodity.ApplicationCommodity);
-        Provider appProvVm = new Provider(Entity.VirtualMachine, ProviderType.HOSTING, 1, 1);
+        // Add VM node into supply chain
+        SupplyChainLinkBuilder sclb = new SupplyChainLinkBuilder();
+        sclb.link(Entity.Application, Entity.VirtualMachine, ProviderType.HOSTING);
+        sclb.commodity(Commodity.VCPU)
+            .commodity(Commodity.VMem)
+            .commodity(Commodity.ApplicationCommodity);
+        EntityLink linkVMToApp = sclb.build();
+        scb.connectsTo(vmNode, linkVMToApp);
+        scb.entity(vmNode);
 
-        templateDTOSet.add(generateTemplateDTO(Entity.Application, appCommSold,
-                                               new TemplateCommBoughtPair(appProvVm,
-                                                                          appCommBoughtFromVm)));
+        // Add PM node into supply chain
+        sclb = new SupplyChainLinkBuilder();
+        sclb.link(Entity.VirtualMachine, Entity.PhysicalMachine, ProviderType.HOSTING);
+        sclb.commodity(Commodity.CPU)
+            .commodity(Commodity.Mem);
+        EntityLink linkPMToVM = sclb.build();
+        scb.connectsTo(pmNode, linkPMToVM);
+        scb.entity(pmNode);
 
-        return templateDTOSet;
+        // Add Datacenter into supply chain
+        sclb = new SupplyChainLinkBuilder();
+        sclb.link(Entity.PhysicalMachine, Entity.DataCenter, ProviderType.HOSTING);
+        sclb.commodity(Commodity.Power)
+            .commodity(Commodity.Space)
+            .commodity(Commodity.Cooling);
+        EntityLink linkDCToPM = sclb.build();
+        scb.connectsTo(dcNode, linkDCToPM);
+        scb.entity(dcNode);
+
+        // Add Network node into supply chain
+        scb.entity(ntNode);
+
+        // Add Distributed Virtual Port Group node into supply chain
+        scb.entity(dvpNode);
+
+        // Add Storage node into supply chain
+        // Setup connection between ST and VM
+        sclb = new SupplyChainLinkBuilder();
+        sclb.link(Entity.VirtualMachine, Entity.Storage, ProviderType.LAYEREDOVER);
+        sclb.commodity(Commodity.StorageAmount)
+            .commodity(Commodity.StorageProvisioned);
+        EntityLink linkSTToVM = sclb.build();
+        // Setup VM node which will be connected with ST node in Supply Chain
+        scb.entity(vmNode);
+        scb.connectsTo(stNode, linkSTToVM);
+
+        // Setup connection between ST and PM
+        sclb = new SupplyChainLinkBuilder();
+        sclb.link(Entity.PhysicalMachine, Entity.Storage, ProviderType.LAYEREDOVER);
+        sclb.commodity(Commodity.StorageAccess)
+            .commodity(Commodity.StorageLatency);
+        EntityLink linkSTToPM = sclb.build();
+        // Setup pm node which will be connected with storage node in Supply Chain
+        scb.entity(pmNode);
+        scb.connectsTo(stNode, linkSTToPM);
+        // Setup ST node into Supply Chain Builder
+        scb.entity(stNode);
+
+        // Add DiskArray node into supply chain
+        sclb = new SupplyChainLinkBuilder();
+        sclb.link(Entity.Storage, Entity.DiskArray, ProviderType.HOSTING);
+        sclb.commodity(Commodity.StorageAccess)
+            .commodity(Commodity.StorageLatency);
+        EntityLink linkDAToST = sclb.build();
+        scb.connectsTo(daNode, linkDAToST);
+        scb.entity(daNode);
+
+        return scb.configure();
     }
 
     /**
      * Return the fields and their meta data required by the probe to validate and discover the
      * targets.
-     * 
+     *
      * @return Account Definition object
      */
     @Override
-    protected Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
-        logger.info(LOGPREFIX + "Get account definition");
+    public Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
+        logger.info("Get account definition");
         /*
-         * No Account Definition entries for this probe. 
-         * This is because the user is always presented 
+         * No Account Definition entries for this probe.
+         * This is because the user is always presented
          * with the 'nameOrAddress' field which denotes the path of the file
          * that will be parsed for this probe.
          */
@@ -547,24 +597,27 @@ public class FileProbe extends AbstractProbe {
 
     /**
      * Validate Target
-     * 
+     *
      * @param accountValues Map representing the values for the fields in the AccountDefintion
      *            required for validating the target
      * @return TargetValidationResponse
      */
     @Override
-    protected TargetValidationResponse validateTarget(Map<String, String> accountValues) {
-        logger.info(LOGPREFIX + "Validate Target");
+    public TargetValidationResponse validateTarget(Map<String, String> accountValues) {
+        logger.info("Validate Target");
         String fileName = accountValues.get(AccountDefinitionEntry.NAME_OR_ADDRESS_FIELD);
-        InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream(fileName);
-        TargetValidationResponse validationResponse = new TargetValidationResponse();
+        final InputStream inputStream = getClass().getClassLoader().getResourceAsStream(fileName);
         if (inputStream != null) {
-            validationResponse.targetValidationStatus = ResponseCode.SUCCESS;
+            try {
+                inputStream.close();
+            } catch (IOException ex) {
+                logger.error("Unable to close file " + fileName, ex);
+            }
+            return TargetValidationResponse.createOkResponse();
         } else {
-            validationResponse.targetValidationStatus = ResponseCode.FAIL;
-            validationResponse.targetValidationExplanation = "File " + fileName
-                                                             + " does not exist.";
+            return TargetValidationResponse.createFailedResponse(new ErrorDTO(
+                            ErrorSeverity.CRITICAL, "File " + fileName));
         }
-        return validationResponse;
+
     }
 }

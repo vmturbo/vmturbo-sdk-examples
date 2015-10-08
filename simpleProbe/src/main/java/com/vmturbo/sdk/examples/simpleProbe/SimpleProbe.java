@@ -18,9 +18,9 @@ import com.vmturbo.platform.sdk.common.supplychain.SupplyChainLinkBuilder;
 import com.vmturbo.platform.sdk.common.supplychain.SupplyChainNodeBuilder;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntry;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntryType;
-import com.vmturbo.platform.sdk.common.util.ResponseCode;
+import com.vmturbo.platform.sdk.common.util.TargetDiscoveryResponse;
 import com.vmturbo.platform.sdk.common.util.TargetValidationResponse;
-import com.vmturbo.platform.sdk.probe.AbstractProbe;
+import com.vmturbo.platform.sdk.probe.IProbe;
 import com.vmturbo.platform.sdk.probe.builder.DatacenterBuilder;
 import com.vmturbo.platform.sdk.probe.builder.DiskArrayBuilder;
 import com.vmturbo.platform.sdk.probe.builder.PhysicalMachineBuilder;
@@ -30,10 +30,9 @@ import com.vmturbo.platform.sdk.probe.builder.VirtualMachineBuilder;
 /**
  * A simple example of probe implementation.
  */
-public class SimpleProbe extends AbstractProbe {
+public class SimpleProbe implements IProbe {
 
-    private static final Logger logger = Logger.getLogger("com.vmturbo.sdk.examples.simpleProbe");
-    private static final String LOGPREFIX = "-- SimpleProbeExample -- : ";
+    private final Logger logger = Logger.getLogger(getClass());
 
     /**
      * Execute discovery of the target.
@@ -42,8 +41,8 @@ public class SimpleProbe extends AbstractProbe {
      * @return A set of entity DTOs for retrieved service entities.
      */
     @Override
-    protected Set<EntityDTO> discoverTarget(Map<String, String> accountDefinitionMap) {
-        logger.info(LOGPREFIX + "Discover Target");
+    public TargetDiscoveryResponse discoverTarget(Map<String, String> accountDefinitionMap) {
+        logger.info("Discover Target");
 
         logger.info("Account Credentials:");
         for (String key : accountDefinitionMap.keySet()) {
@@ -66,21 +65,21 @@ public class SimpleProbe extends AbstractProbe {
         DatacenterBuilder dcb = new DatacenterBuilder(DC1_ID);
         dcb.displayName(DC1_NAME)
         //commodities sold
-        .space(100f)
-        .power(100f)
-        .cooling(100f);
+        .space(100f,1f, null)
+        .power(100f,1f, null)
+        .cooling(100f,1f, null);
         EntityDTO dc = dcb.configure();
         // Physical machine entity DTO
         PhysicalMachineBuilder pmb = new PhysicalMachineBuilder(PM1_ID);
         pmb.displayName(PM1_NAME)
         //commodities sold
-        .mem(100f)
-        .cpu(100f)
+        .mem(100f, 1f, null)
+        .cpu(100f, 1f, null)
         //commodities bought, with corresponding provider
         .datacenter(DC1_ID)
-        .coolingBought(null, 100f, 1f)
-        .powerBought(null, 100f, 1f)
-        .spaceBought(null, 100f, 1f);
+        .coolingBought(null, 1f)
+        .powerBought(null, 1f)
+        .spaceBought(null, 1f);
 
         EntityDTO pm = pmb.configure();
 
@@ -88,11 +87,11 @@ public class SimpleProbe extends AbstractProbe {
         DiskArrayBuilder dab = new DiskArrayBuilder(DA1_ID);
         dab.displayName(DA1_NAME)
         //commodities sold
-        .storageAcess(100f)
-        .storageAmount(100f)
-        .storageExtent(100f)
-        .storageLatency(100f)
-        .storageProvisioned(100f);
+        .storageAccess(100f, 1f, null)
+        .storageAmount(100f, 1f, null)
+        .storageExtent(100f, 1f, null)
+        .storageLatency(100f, 1f, null)
+        .storageProvisioned(100f, 1f, null);
 
         EntityDTO da = dab.configure();
 
@@ -100,18 +99,18 @@ public class SimpleProbe extends AbstractProbe {
         StorageBuilder stb = new StorageBuilder(ST1_ID);
         stb.displayName(ST1_NAME)
         //commodities sold
-        .storageAccess(100f)
-        .storageAmount(100f)
-        .storageExtent(100f)
-        .storageLatency(100f)
-        .storageProvisioned(100f)
+        .storageAccess(100f, 1f, null)
+        .storageAmount(100f, 1f, null)
+        .storageExtent(100f, 1f, null)
+        .storageLatency(100f, 1f, null)
+        .storageProvisioned(100f, 1f, null)
         //commodities bought with corresponding provider
         .diskArray(DA1_ID)
-        .storageAccessBought(null, 100f, 1f)
-        .storageAmountBought(null, 100f, 1f)
-        .storageExtentBought(null, 100f, 1f)
-        .storageLatencyBought(null, 100f, 1f)
-        .storageProvisionedBought(null, 100f, 1f);
+        .storageAccessBought(null, 1f)
+        .storageAmountBought(null, 1f)
+        .storageExtentBought(null, 1f)
+        .storageLatencyBought(null, 1f)
+        .storageProvisionedBought(null, 1f);
         EntityDTO st = stb.configure();
 
 
@@ -119,18 +118,18 @@ public class SimpleProbe extends AbstractProbe {
         VirtualMachineBuilder vmb = new VirtualMachineBuilder(VM1_ID);
         vmb.displayName(VM1_NAME)
         //commodities sold
-        .vcpu(100f)
-        .vmem(100f)
-        .vstorage(100f)
+        .vcpu(100f, 1f, null)
+        .vmem(100f, 1f, null)
+        .vstorage(100f, 1f, null)
         //commodities bought with corresponding provider
         .pm(PM1_ID)
-        .cpuBought(null, 100f, 1f)
-        .memBought(null, 100f, 1f)
+        .cpuBought(null, 1f)
+        .memBought(null, 1f)
         .storage(ST1_ID)
-        .storageAccessBought(null, 100f, 1f)
-        .storageAmountBought(null, 100f, 1f)
-        .storageLatencyBought(null, 100f, 1f)
-        .storageProvisionedBought(null, 100f, 1f);
+        .storageAccessBought(null, 1f)
+        .storageAmountBought(null, 1f)
+        .storageLatencyBought(null, 1f)
+        .storageProvisionedBought(null, 1f);
         EntityDTO vm = vmb.configure();
 
         // Create the relationships between entities.
@@ -140,7 +139,7 @@ public class SimpleProbe extends AbstractProbe {
         // PM and Storage
         pm.getUnderlying().add(st.getId());
 
-        return Sets.newHashSet(dc, da, pm, st, vm);
+        return new TargetDiscoveryResponse(Sets.newHashSet(dc, da, pm, st, vm));
     }
 
     /**
@@ -152,8 +151,8 @@ public class SimpleProbe extends AbstractProbe {
      * @return A set of template DTOs for this probe.
      */
     @Override
-    protected Set<TemplateDTO> getSupplyChainDefinition() {
-        logger.info(LOGPREFIX + "Get supply chain");
+    public Set<TemplateDTO> getSupplyChainDefinition() {
+        logger.info("Get supply chain");
         SupplyChainBuilder scb = new SupplyChainBuilder();
 
         // VM
@@ -255,8 +254,8 @@ public class SimpleProbe extends AbstractProbe {
      * @return The account definition map.
      */
     @Override
-    protected Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
-        logger.info(LOGPREFIX + "Get account definition");
+    public Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
+        logger.info("Get account definition");
 
         //AccountDefinitionEntry entry = SDKUtil.setTargetIdentifierEntry(displayname, description, mandatory, verification_regex);
         ImmutableMap<String, AccountDefinitionEntry> accountDefinitionEntryMap = ImmutableMap
@@ -299,12 +298,9 @@ public class SimpleProbe extends AbstractProbe {
      * @return The message of target validation status.
      */
     @Override
-    protected TargetValidationResponse validateTarget(Map<String, String> accountValues) {
-        logger.info(LOGPREFIX + "Validate Target");
-        TargetValidationResponse validationResponse = new TargetValidationResponse();
-        validationResponse.targetValidationStatus = ResponseCode.SUCCESS;
-        validationResponse.targetValidationExplanation = "Test Probe Validated";
-        return validationResponse;
+    public TargetValidationResponse validateTarget(Map<String, String> accountValues) {
+        logger.info("Validate Target");
+        return TargetValidationResponse.createOkResponse();
     }
 
 }
