@@ -1,19 +1,21 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
-
-	<modelVersion>4.0.0</modelVersion>
-
-	<artifactId>com.vmturbo.sdk.examples.templateProbe</artifactId>
-	<groupId>com.vmturbo</groupId>
-	<packaging>jar</packaging>
-	<version>5.3-SNAPSHOT</version>
-
 	<parent>
 		<artifactId>com.vmturbo.sdk.examples</artifactId>
 		<groupId>com.vmturbo</groupId>
 		<version>5.3-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<artifactId>com.vmturbo.sdk.examples.vimProbe</artifactId>
+	<groupId>com.vmturbo</groupId>
+	<packaging>jar</packaging>
+
+	<properties>
+		<javaVersion>1.7</javaVersion>
+	</properties>
 
 	<build>
 
@@ -100,6 +102,11 @@
 	</build>
 
 	<dependencies>
+		<dependency>
+			<groupId>com.vmware</groupId>
+			<artifactId>vijava</artifactId>
+			<version>5.1</version>
+		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>

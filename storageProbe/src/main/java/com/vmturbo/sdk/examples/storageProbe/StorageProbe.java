@@ -19,7 +19,7 @@ import com.vmturbo.platform.sdk.common.DTO.TemplateDTO;
 import com.vmturbo.platform.sdk.common.supplychain.EntityBuilder;
 import com.vmturbo.platform.sdk.common.supplychain.EntityLink;
 import com.vmturbo.platform.sdk.common.supplychain.ExternalEntityLink;
-import com.vmturbo.platform.sdk.common.supplychain.ExternalEntityLinkDef;
+import com.vmturbo.platform.sdk.common.supplychain.ServerEntityPropertyDef;
 import com.vmturbo.platform.sdk.common.supplychain.ExternalLinkBuilder;
 import com.vmturbo.platform.sdk.common.supplychain.SupplyChainBuilder;
 import com.vmturbo.platform.sdk.common.supplychain.SupplyChainConstants;
@@ -27,9 +27,9 @@ import com.vmturbo.platform.sdk.common.supplychain.SupplyChainLinkBuilder;
 import com.vmturbo.platform.sdk.common.supplychain.SupplyChainNodeBuilder;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntry;
 import com.vmturbo.platform.sdk.common.util.AccountDefinitionEntryType;
-import com.vmturbo.platform.sdk.common.util.ResponseCode;
+import com.vmturbo.platform.sdk.common.util.TargetDiscoveryResponse;
 import com.vmturbo.platform.sdk.common.util.TargetValidationResponse;
-import com.vmturbo.platform.sdk.probe.AbstractProbe;
+import com.vmturbo.platform.sdk.probe.IProbe;
 import com.vmturbo.platform.sdk.probe.builder.DiskArrayBuilder;
 /**
  * This is a probe that instantiates DiskArray found in the target.
@@ -41,13 +41,9 @@ import com.vmturbo.platform.sdk.probe.builder.DiskArrayBuilder;
  * @author haoyuanwang
  *
  */
-public class StorageProbe extends AbstractProbe {
-    private static final Logger logger = Logger
-                    .getLogger("com.vmturbo.platform.container.mediation");
-    String LOGPREFIX="";
-    final String DA1_ID = "da1-id";
-    final String DA1_NAME = "da1-name";
-    final String DA1_PATH_VAL = "DA-PATH-VAL";
+public class StorageProbe implements IProbe {
+    private final Logger logger = Logger.getLogger(getClass());
+
     final String SC_ID = "SC-ID-VAL";
     final String DA_LUN_VAL = "00000000";
     /**
@@ -59,8 +55,8 @@ public class StorageProbe extends AbstractProbe {
      * @return A set of template DTOs for each entity type created by this supply chain.
      */
     @Override
-    protected Set<TemplateDTO> getSupplyChainDefinition() {
-        logger.info(LOGPREFIX + "Get supply chain");
+    public Set<TemplateDTO> getSupplyChainDefinition() {
+        logger.info("Get supply chain");
         // Create supply chain builder
         SupplyChainBuilder stScb = new SupplyChainBuilder();
 
@@ -88,7 +84,7 @@ public class StorageProbe extends AbstractProbe {
             .commodity(Commodity.Extent);
         //Set LunUUID to be the property that will be used to stitch DiskArray and Storage
         stb.probeEntityPropertyDef(SupplyChainConstants.STORAGE_ID, "LunUUID")
-        .externalEntityPropertyDef(ExternalEntityLinkDef.STORAGE_LUNUUID);
+        .externalEntityPropertyDef(ServerEntityPropertyDef.STORAGE_LUNUUID);
         ExternalEntityLink st=stb.build();
 
         // Link from DA to SC
@@ -114,8 +110,8 @@ public class StorageProbe extends AbstractProbe {
      *
      * @return Account Definition object
      */
-    protected Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
-        logger.info(LOGPREFIX + "Get account definition");
+    public Map<String, AccountDefinitionEntry> getAccountDefinitionEntryMap() {
+        logger.info("Get account definition");
         ImmutableMap<String, AccountDefinitionEntry> accountDefinitionEntryMap = ImmutableMap
                         .of(
                             /*
@@ -151,17 +147,21 @@ public class StorageProbe extends AbstractProbe {
      *                          required for discovering the target
      * @return                  Entities discovered by the probe as a set of {@link EntityDTO}
      */
-    protected Set<EntityDTO> discoverTarget(Map<String, String> accountDefinitionMap) {
-        logger.info(LOGPREFIX + "discover target");
-        String dispNamePrefix = "da-";
+    public TargetDiscoveryResponse discoverTarget(Map<String, String> accountDefinitionMap) {
+        logger.info("discover target");
+
         // get unique target identifier defined by user in UI
         String targetID = accountDefinitionMap.get(AccountDefinitionEntry.TARGET_IDENTIFIER);
 
         //set display name based on target identifier
-        String dispName = dispNamePrefix + accountDefinitionMap.get(AccountDefinitionEntry.TARGET_IDENTIFIER);
+        String dispNamePrefix = "da-";//
+        String dispName = dispNamePrefix + targetID;
 
         // get properties from the properties file which has the same name as target identifier
-        // if no such file, use the default value
+        // the valid keys for the .propertities file are: LunUUID, , storageAmountSold
+        // , storageLatencySold.
+        // If no such file, parse the vales from default .propertities file. Use the default value
+        // if even the default file is not present.
         Properties props = getPropValues(targetID);
 
         String lunUUIDs = DA_LUN_VAL;
@@ -170,21 +170,41 @@ public class StorageProbe extends AbstractProbe {
         }
         lunUUIDs=lunUUIDs.trim();
 
+        float storageAmountSold = 100F;
+        if(props!=null && props.containsKey("storageAmountSold")){
+            try{
+                storageAmountSold = Float.parseFloat(props.getProperty("storageAmountSold"));
+            }catch(NumberFormatException ex){
+                logger.error("storageAmountSold value can NOT be parsed to a float");
+            }
+        }
+
+
+        float storageLatencySold = 100F;
+        if(props!=null && props.containsKey("storageLatencySold")){
+            try{
+                storageLatencySold = Float.parseFloat(props.getProperty("storageLatencySold"));
+            }catch(NumberFormatException ex){
+                logger.error("storageLatencySold value can NOT be parsed to a float");
+            }
+        }
+
         // DiskArray entity DTO
-        DiskArrayBuilder da = new DiskArrayBuilder(DA1_ID)
-        .displayName(DA1_NAME)
-        .lunId(lunUUIDs)
-        .path(DA1_PATH_VAL)
+
+        logger.info("setting displayName for storageProbe"+dispName);
+        DiskArrayBuilder da = new DiskArrayBuilder(dispName)
+        .displayName(dispName)
+        .storageId(lunUUIDs)
         // Commodities sold
-        .storageAcess(100F)
-        .storageAmount(100F)
-        .storageProvisioned(100F)
-        .storageLatency(100f)
-        .storageExtent(100f)
+        .storageAccess(100F, 1f, null)
+        .storageAmount(storageAmountSold, 1f, null)
+        .storageProvisioned(100F, 1f, null)
+        .storageLatency(storageLatencySold, 1f, null)
+        .storageExtent(100F, 1f, null)
         // Commodities bought, with corresponding provider
         .storageController(SC_ID)
-        .storageAmountBought(null, 100f, 1f)
-        .cpuBought(null, 100f, 1f);
+        .storageAmountBought(null, 1f)
+        .cpuBought(null, 1f);
         EntityDTO dae = da.configure();
 
         // StorageController entity DTO
@@ -197,7 +217,7 @@ public class StorageProbe extends AbstractProbe {
         .capacity(100f)
         .configure();
 
-        return Sets.newHashSet(dae, sce);
+        return new TargetDiscoveryResponse(Sets.newHashSet(dae, sce));
     }
 
     /**
@@ -218,7 +238,7 @@ public class StorageProbe extends AbstractProbe {
 
         // create name of the specific Properties file
         String propFileName = targetID + ".properties";
-        logger.info(LOGPREFIX + "Start loading properties file " + propFileName);
+        logger.info("Start loading properties file " + propFileName);
         try {
             // setup file path for the Properties file
             File catalinaBase = new File( System.getProperty( "catalina.base" ) ).getAbsoluteFile();
@@ -242,11 +262,11 @@ public class StorageProbe extends AbstractProbe {
     public Properties getDefaultPropValues() {
     Properties prop = new Properties();
     String propFileName = "default.properties";
-    logger.info(LOGPREFIX + "Started loading default properties file " + propFileName);
+    logger.info("Started loading default properties file " + propFileName);
     try {
     InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream(propFileName);
     if (inputStream == null) {
-        logger.error(LOGPREFIX + "Property file '" + propFileName + "' not found in the classpath");
+        logger.error("Property file '" + propFileName + "' not found in the classpath");
         return null;
     }
     if (inputStream != null) {
@@ -267,12 +287,9 @@ public class StorageProbe extends AbstractProbe {
      *
      * @return                  {@link TargetValidationResponse}
      */
-    protected TargetValidationResponse validateTarget(Map<String, String> accountValues) {
-        logger.info(LOGPREFIX + "validate target");
-        TargetValidationResponse validationResponse = new TargetValidationResponse();
-        validationResponse.targetValidationStatus = ResponseCode.SUCCESS;
-        validationResponse.targetValidationExplanation = "Sample Storage Probe Validated";
-        return validationResponse;
+    public TargetValidationResponse validateTarget(Map<String, String> accountValues) {
+        logger.info("validate target");
+        return TargetValidationResponse.createOkResponse();
     }
 
 }
