@@ -2,5 +2,7 @@
 <probe>
     <full-class-name>com.vmturbo.sdk.examples.templateProbe.TemplateProbe</full-class-name>
     <type>TEMPLATE - PUT HERE YOUR PROBE TYPE IDENTIFIER</type>
+    <category>CUSTOM - PUT HERE YOUR PROBE CATEGORY</category>
+    <executor-class-name>com.vmturbo.sdk.examples.templateProbe.TemplateActionExecutor</executor-class-name>
     <version>1.0.0</version>
 </probe>
